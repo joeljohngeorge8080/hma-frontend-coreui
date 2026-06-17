@@ -143,8 +143,27 @@ export const localEmployees = {
 
       current_salary: initialSalary,
 
+      // profile photo (base64 data URL; S3 URL when backend is live)
+      photo_url: data.photo_url || null,
+
       // employee_documents (uploaded later)
       documents: [],
+
+      // employee_project_assignments (current + history)
+      project_assignments: data.initial_project
+        ? [
+            {
+              id: uid(),
+              project_name: data.initial_project,
+              assigned_date: data.initial_project_date || ts.split('T')[0],
+              end_date: null,
+              status: 'Active',
+              remarks: data.initial_project_remarks || '',
+              assigned_by: data.assigned_by || 'HR',
+              created_at: ts,
+            },
+          ]
+        : [],
 
       // employee_status_history
       status_history: [],
@@ -283,6 +302,50 @@ export const localEmployees = {
     }
     writeAll(rows)
     return entry
+  },
+
+  // ── updatePhoto ──────────────────────────────────────────────────────────────
+  updatePhoto(id, photoUrl) {
+    const rows = readAll()
+    const idx = rows.findIndex((e) => e.id === id)
+    if (idx === -1) throw new Error('Employee not found')
+    rows[idx] = { ...rows[idx], photo_url: photoUrl, updated_at: now() }
+    writeAll(rows)
+    return rows[idx]
+  },
+
+  // ── assignProject ─────────────────────────────────────────────────────────────
+  assignProject(id, { project_name, assigned_date, remarks = '', assigned_by = 'HR' }) {
+    const rows = readAll()
+    const idx = rows.findIndex((e) => e.id === id)
+    if (idx === -1) throw new Error('Employee not found')
+    const ts = now()
+    const today = ts.split('T')[0]
+    const prev = rows[idx].project_assignments || []
+
+    // End the current active assignment
+    const updated = prev.map((a) =>
+      a.status === 'Active' ? { ...a, status: 'Ended', end_date: assigned_date || today } : a,
+    )
+
+    const newEntry = {
+      id: uid(),
+      project_name,
+      assigned_date: assigned_date || today,
+      end_date: null,
+      status: 'Active',
+      remarks,
+      assigned_by,
+      created_at: ts,
+    }
+
+    rows[idx] = {
+      ...rows[idx],
+      project_assignments: [...updated, newEntry],
+      updated_at: ts,
+    }
+    writeAll(rows)
+    return rows[idx]
   },
 
   // ── addBankAccount ────────────────────────────────────────────────────────────

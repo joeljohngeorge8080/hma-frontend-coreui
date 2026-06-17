@@ -37,6 +37,8 @@ import SalaryTab from './components/SalaryTab'
 import AttendanceSummaryTab from './components/AttendanceSummaryTab'
 import ChangeStatusModal from './components/ChangeStatusModal'
 import SalaryUpdateModal from './components/SalaryUpdateModal'
+import ProfilePhotoUpload from './components/ProfilePhotoUpload'
+import ProjectAssignmentSection from './components/ProjectAssignmentSection'
 
 const STATUS_COLORS = {
   Active: 'success',
@@ -50,6 +52,7 @@ const TABS = [
   { key: 'contact', label: 'Contact' },
   { key: 'address', label: 'Address' },
   { key: 'employment', label: 'Employment' },
+  { key: 'projects', label: 'Projects' },
   { key: 'govids', label: 'Gov IDs' },
   { key: 'bank', label: 'Bank' },
   { key: 'family', label: 'Family' },
@@ -70,6 +73,7 @@ const EmployeeProfile = () => {
 
   const [showChangeStatus, setShowChangeStatus] = useState(false)
   const [showSalaryUpdate, setShowSalaryUpdate] = useState(false)
+  const [photo, setPhoto] = useState(null)
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -78,11 +82,13 @@ const EmployeeProfile = () => {
       try {
         const { data } = await api.get(`/employees/${id}`)
         setProfile(data)
+        if (data.photo_url) setPhoto(data.photo_url)
       } catch {
         // API not available — read from local store
         const local = localEmployees.getById(id)
         if (local) {
           setProfile(local)
+          if (local.photo_url) setPhoto(local.photo_url)
         } else {
           setError('Employee not found')
         }
@@ -136,20 +142,39 @@ const EmployeeProfile = () => {
 
       <CCard className="mb-4">
         <CCardHeader>
-          {/* Employee identity */}
-          <CRow className="align-items-center g-2">
+          <CRow className="align-items-center g-3">
+            {/* Avatar */}
+            <CCol xs="auto">
+              <ProfilePhotoUpload
+                photo={photo}
+                name={fullName}
+                size={64}
+                canEdit={canEdit}
+                onChange={(dataUrl) => {
+                  setPhoto(dataUrl)
+                  try {
+                    localEmployees.updatePhoto(id, dataUrl)
+                  } catch {
+                    // silent — profile photo save failed
+                  }
+                }}
+              />
+            </CCol>
+
+            {/* Identity */}
             <CCol>
-              <div className="d-flex align-items-center flex-wrap gap-2">
+              <div className="d-flex align-items-center flex-wrap gap-2 mb-1">
                 <strong className="fs-5">{fullName}</strong>
                 <span className="text-body-secondary">{profile.employee_id}</span>
                 <CBadge color={STATUS_COLORS[profile.status] || 'secondary'}>
                   {profile.status}
                 </CBadge>
-                <span className="text-body-secondary small">
-                  {profile.employment?.designation || profile.designation || ''}{' '}
-                  {(profile.employment?.department || profile.department) &&
-                    `• ${profile.employment?.department || profile.department}`}
-                </span>
+              </div>
+              <div className="text-body-secondary small">
+                {profile.employment?.designation || profile.designation || ''}
+                {(profile.employment?.department || profile.department) &&
+                  ` • ${profile.employment?.department || profile.department}`}
+                {profile.employee_category && ` • ${profile.employee_category}`}
               </div>
             </CCol>
 
@@ -216,6 +241,14 @@ const EmployeeProfile = () => {
             </CTabPane>
             <CTabPane visible={activeTab === 'employment'}>
               <EmploymentTab profile={profile} canEdit={canEdit} onSave={refreshProfile} />
+            </CTabPane>
+            <CTabPane visible={activeTab === 'projects'}>
+              <ProjectAssignmentSection
+                employeeId={id}
+                projectAssignments={profile.project_assignments || []}
+                canEdit={canEdit}
+                onSave={refreshProfile}
+              />
             </CTabPane>
             <CTabPane visible={activeTab === 'govids'}>
               <GovernmentIdsTab

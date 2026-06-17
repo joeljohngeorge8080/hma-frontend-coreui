@@ -28,6 +28,7 @@ import { usePermission } from '../../hooks/usePermission'
 import { MODULE } from '../../constants/modules'
 import { localEmployees } from '../../services/localEmployees'
 import api from '../../services/api'
+import ProfilePhotoUpload from './components/ProfilePhotoUpload'
 
 // ─── option lists ─────────────────────────────────────────────────────────────
 
@@ -81,6 +82,9 @@ const DEFAULT = {
   },
   bank_accounts: [],
   family_members: [],
+  initial_project: '',
+  initial_project_date: '',
+  initial_project_remarks: '',
 }
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
@@ -114,6 +118,7 @@ const EmployeeForm = () => {
   const [fetching, setFetching] = useState(isEdit)
   const [fetchError, setFetchError] = useState('')
   const [submitError, setSubmitError] = useState('')
+  const [photo, setPhoto] = useState(null)
 
   const {
     register,
@@ -139,6 +144,10 @@ const EmployeeForm = () => {
   } = useFieldArray({ control, name: 'family_members' })
 
   const watchedStatus = watch('status')
+  const watchedDept = watch('employment.department') || ''
+  const watchedFirst = watch('first_name') || ''
+  const watchedLast = watch('last_name') || ''
+  const isProjectDept = watchedDept.toLowerCase().includes('project')
 
   // ── load for edit mode ───────────────────────────────────────────────────────
 
@@ -204,6 +213,7 @@ const EmployeeForm = () => {
           bank_accounts: data.bank_accounts || [],
           family_members: data.family_members || [],
         })
+        if (data.photo_url) setPhoto(data.photo_url)
       } catch {
         setFetchError('Failed to load employee data.')
       } finally {
@@ -243,20 +253,28 @@ const EmployeeForm = () => {
     try {
       let saved = null
 
+      const payload = { ...form, photo_url: photo || undefined }
+
       if (isEdit) {
-        // Try API first, fall back to local store
         try {
-          await api.put(`/employees/${id}`, form)
+          await api.put(`/employees/${id}`, payload)
         } catch {
-          localEmployees.update(id, form)
+          localEmployees.update(id, payload)
         }
         navigate(`/staff/${id}`)
       } else {
+        // Map form project fields to local store's expected keys
+        const withProject = {
+          ...payload,
+          initial_project: form.initial_project || undefined,
+          initial_project_date: form.initial_project_date || undefined,
+          initial_project_remarks: form.initial_project_remarks || undefined,
+        }
         try {
-          const { data } = await api.post('/employees', form)
+          const { data } = await api.post('/employees', withProject)
           saved = data
         } catch {
-          saved = localEmployees.create(form)
+          saved = localEmployees.create(withProject)
         }
         navigate(`/staff/${saved.id}`)
       }
@@ -307,6 +325,26 @@ const EmployeeForm = () => {
           </span>
         </CCardHeader>
         <CCardBody>
+          {/* Photo + fields side by side */}
+          <div className="d-flex gap-4 align-items-start mb-3">
+            <div className="d-flex flex-column align-items-center gap-1" style={{ minWidth: 96 }}>
+              <ProfilePhotoUpload
+                photo={photo}
+                name={`${watchedFirst} ${watchedLast}`.trim() || 'Employee'}
+                size={96}
+                canEdit
+                onChange={setPhoto}
+              />
+              <span className="text-body-secondary" style={{ fontSize: 11 }}>
+                Click to upload
+              </span>
+            </div>
+            <div className="flex-grow-1">
+              <div className="text-body-secondary small mb-2">
+                Accepted: JPG, PNG, WebP &mdash; max 2 MB
+              </div>
+            </div>
+          </div>
           <CRow className="g-3">
             {/* Employee ID */}
             <CCol md={3}>
@@ -607,6 +645,42 @@ const EmployeeForm = () => {
                   <CFormInput type="date" {...register('employment.start_date')} />
                 </F>
               </CCol>
+
+              {/* Project Assignment — shown when department contains "project" */}
+              {isProjectDept && (
+                <>
+                  <CCol md={12}>
+                    <hr className="my-1" />
+                    <div className="fw-semibold small text-info mb-2">
+                      Project Assignment
+                      <span className="text-body-secondary fw-normal ms-2">
+                        (logged for audit trail)
+                      </span>
+                    </div>
+                  </CCol>
+                  <CCol md={5}>
+                    <F label="Assign to Project">
+                      <CFormInput
+                        {...register('initial_project')}
+                        placeholder="e.g. Smart City Phase 2"
+                      />
+                    </F>
+                  </CCol>
+                  <CCol md={3}>
+                    <F label="Assigned Date">
+                      <CFormInput type="date" {...register('initial_project_date')} />
+                    </F>
+                  </CCol>
+                  <CCol md={4}>
+                    <F label="Remarks">
+                      <CFormInput
+                        {...register('initial_project_remarks')}
+                        placeholder="Optional notes"
+                      />
+                    </F>
+                  </CCol>
+                </>
+              )}
             </CRow>
           </CAccordionBody>
         </CAccordionItem>
