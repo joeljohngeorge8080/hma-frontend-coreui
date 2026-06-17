@@ -51,11 +51,15 @@ const _nav = [
     roles: STAFF_SIDE_ROLES,
   },
   {
-    component: CNavItem,
+    component: CNavGroup,
     name: 'Attendance',
-    to: '/attendance',
     icon: <CIcon icon={cilCalendar} customClassName="nav-icon" />,
     roles: STAFF_SIDE_ROLES,
+    items: [
+      { component: CNavItem, name: 'Overview', to: '/attendance' },
+      { component: CNavItem, name: 'Import Excel', to: '/attendance/import' },
+      { component: CNavItem, name: 'Corrections', to: '/attendance/corrections' },
+    ],
   },
   {
     component: CNavItem,

@@ -24,6 +24,9 @@ const Dashboard = React.lazy(() => import('./views/dashboard/Dashboard'))
 const EmployeeList = React.lazy(() => import('./views/staff/EmployeeList'))
 const EmployeeProfile = React.lazy(() => import('./views/staff/EmployeeProfile'))
 const EmployeeForm = React.lazy(() => import('./views/staff/EmployeeForm'))
+const AttendanceDashboard = React.lazy(() => import('./views/attendance/AttendanceDashboard'))
+const AttendanceImport = React.lazy(() => import('./views/attendance/AttendanceImport'))
+const AttendanceCorrections = React.lazy(() => import('./views/attendance/AttendanceCorrections'))
 
 /**
  * Build a placeholder page component bound to a fixed title/message.
@@ -94,19 +97,19 @@ export const routes = [
   {
     path: '/attendance',
     name: 'Attendance',
-    element: placeholder('Attendance'),
+    element: AttendanceDashboard,
     module: MODULE.ATTENDANCE,
   },
   {
     path: '/attendance/import',
     name: 'Attendance Import',
-    element: placeholder('Attendance Import'),
+    element: AttendanceImport,
     module: MODULE.ATTENDANCE,
   },
   {
     path: '/attendance/corrections',
     name: 'Attendance Corrections',
-    element: placeholder('Attendance Corrections'),
+    element: AttendanceCorrections,
     module: MODULE.ATTENDANCE,
   },
 
