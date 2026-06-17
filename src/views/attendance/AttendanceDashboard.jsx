@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   CBadge,
   CButton,
@@ -55,10 +55,12 @@ const StatCard = ({ label, value, color }) => (
 
 const AttendanceDashboard = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const canEdit = usePermission(MODULE.ATTENDANCE, 'edit')
 
-  const [year, setYear] = useState(thisYear)
-  const [month, setMonth] = useState(thisMonth)
+  // If navigated from import wizard, jump to the imported month/year
+  const [year, setYear] = useState(location.state?.year || thisYear)
+  const [month, setMonth] = useState(location.state?.month || thisMonth)
   const [agg, setAgg] = useState(null)
   const [uploads, setUploads] = useState([])
   const [summaries, setSummaries] = useState([])
@@ -157,23 +159,30 @@ const AttendanceDashboard = () => {
         <>
           {/* Aggregate summary cards */}
           {agg ? (
-            <CRow className="g-3 mb-4">
-              <CCol xs={6} md>
-                <StatCard label="Total Employees" value={agg.total_employees} color="primary" />
-              </CCol>
-              <CCol xs={6} md>
-                <StatCard label="Present" value={agg.present_count} color="success" />
-              </CCol>
-              <CCol xs={6} md>
-                <StatCard label="Absent" value={agg.absent_count} color="danger" />
-              </CCol>
-              <CCol xs={6} md>
-                <StatCard label="Late Days" value={agg.late_days} color="warning" />
-              </CCol>
-              <CCol xs={6} md>
-                <StatCard label="On Leave" value={agg.leave_count} color="info" />
-              </CCol>
-            </CRow>
+            <>
+              <CRow className="g-3 mb-2">
+                <CCol xs={6} md>
+                  <StatCard label="Total Employees" value={agg.total_employees} color="primary" />
+                </CCol>
+                <CCol xs={6} md>
+                  <StatCard label="No Absences" value={agg.clean_count} color="success" />
+                </CCol>
+                <CCol xs={6} md>
+                  <StatCard label="Have Absent Days" value={agg.has_absent} color="danger" />
+                </CCol>
+                <CCol xs={6} md>
+                  <StatCard label="Have Late Entries" value={agg.has_late} color="warning" />
+                </CCol>
+                <CCol xs={6} md>
+                  <StatCard label="Took Leave" value={agg.has_leave} color="info" />
+                </CCol>
+              </CRow>
+              <p className="text-body-secondary small mb-4 px-1">
+                Each number = count of employees. Total absent days this month:{' '}
+                <strong>{agg.total_absent_days}</strong> &nbsp;|&nbsp; Total late days:{' '}
+                <strong>{agg.total_late_days}</strong>
+              </p>
+            </>
           ) : (
             <div className="text-body-secondary small mb-4 px-1">
               No attendance data for {MONTHS[month - 1]} {year}. Upload an Excel file to get

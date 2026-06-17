@@ -317,16 +317,19 @@ export const localAttendance = {
       (s) => s.year === Number(year) && s.month === Number(month),
     )
     if (rows.length === 0) return null
-    return rows.reduce(
-      (acc, s) => ({
-        total_employees: acc.total_employees + 1,
-        present_count: acc.present_count + (s.present_count || 0),
-        absent_count: acc.absent_count + (s.absent_count || 0),
-        late_days: acc.late_days + (s.late_days || 0),
-        leave_count: acc.leave_count + (s.leave_count || 0),
-      }),
-      { total_employees: 0, present_count: 0, absent_count: 0, late_days: 0, leave_count: 0 },
-    )
+    // Count employees (not days) — each metric answers "how many employees had this?"
+    return {
+      total_employees: rows.length,
+      clean_count: rows.filter(
+        (s) => (s.absent_count || 0) === 0 && (s.late_minutes_total || 0) === 0,
+      ).length,
+      has_absent: rows.filter((s) => (s.absent_count || 0) > 0).length,
+      has_late: rows.filter((s) => (s.late_days || 0) > 0).length,
+      has_leave: rows.filter((s) => (s.leave_count || 0) > 0).length,
+      // Day-level totals (for reference, not shown on main cards)
+      total_absent_days: rows.reduce((sum, s) => sum + (s.absent_count || 0), 0),
+      total_late_days: rows.reduce((sum, s) => sum + (s.late_days || 0), 0),
+    }
   },
 
   isValidStatus,
