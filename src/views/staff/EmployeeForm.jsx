@@ -32,6 +32,8 @@ import ProfilePhotoUpload from './components/ProfilePhotoUpload'
 
 // ─── option lists ─────────────────────────────────────────────────────────────
 
+const DEPARTMENTS = ['SDP', 'FINANCE', 'HR', 'HLL MANAGEMENT', 'UTILITY STAFF', 'OTHER']
+
 const GENDERS = ['Male', 'Female', 'Other']
 const CATEGORIES = ['Permanent', 'FTC', 'TPC']
 const STATUSES = ['Active', 'Inactive', 'Resigned', 'Retired']
@@ -67,6 +69,7 @@ const DEFAULT = {
   employment: {
     designation: '',
     department: '',
+    department_other: '',
     reporting_to: '',
     working_region: '',
     working_state: '',
@@ -145,9 +148,10 @@ const EmployeeForm = () => {
 
   const watchedStatus = watch('status')
   const watchedDept = watch('employment.department') || ''
+  const watchedDeptOther = watch('employment.department_other') || ''
   const watchedFirst = watch('first_name') || ''
   const watchedLast = watch('last_name') || ''
-  const isProjectDept = watchedDept.toLowerCase().includes('project')
+  const isProjectDept = watchedDept === 'SDP'
 
   // ── load for edit mode ───────────────────────────────────────────────────────
 
@@ -196,7 +200,14 @@ const EmployeeForm = () => {
           },
           employment: {
             designation: data.employment?.designation || '',
-            department: data.employment?.department || '',
+            department: DEPARTMENTS.includes(data.employment?.department)
+              ? data.employment.department
+              : data.employment?.department
+                ? 'OTHER'
+                : '',
+            department_other: DEPARTMENTS.includes(data.employment?.department)
+              ? ''
+              : data.employment?.department || '',
             reporting_to: data.employment?.reporting_to || '',
             working_region: data.employment?.working_region || '',
             working_state: data.employment?.working_state || '',
@@ -253,7 +264,18 @@ const EmployeeForm = () => {
     try {
       let saved = null
 
-      const payload = { ...form, photo_url: photo || undefined }
+      // Resolve actual department: if OTHER was picked, use the typed value
+      const resolvedDept =
+        form.employment?.department === 'OTHER'
+          ? form.employment?.department_other || 'OTHER'
+          : form.employment?.department || ''
+
+      const { department_other: _deptOther, ...restEmployment } = form.employment || {}
+      const payload = {
+        ...form,
+        photo_url: photo || undefined,
+        employment: { ...restEmployment, department: resolvedDept },
+      }
 
       if (isEdit) {
         try {
@@ -613,10 +635,21 @@ const EmployeeForm = () => {
               </CCol>
               <CCol md={4}>
                 <F label="Department">
-                  <CFormInput
-                    {...register('employment.department')}
-                    placeholder="e.g. Engineering"
-                  />
+                  <CFormSelect {...register('employment.department')}>
+                    <option value="">— Select department —</option>
+                    {DEPARTMENTS.map((d) => (
+                      <option key={d} value={d}>
+                        {d === 'SDP' ? 'SDP (Project Department)' : d}
+                      </option>
+                    ))}
+                  </CFormSelect>
+                  {watchedDept === 'OTHER' && (
+                    <CFormInput
+                      {...register('employment.department_other')}
+                      placeholder="Type department name"
+                      className="mt-2"
+                    />
+                  )}
                 </F>
               </CCol>
               <CCol md={4}>
@@ -646,7 +679,7 @@ const EmployeeForm = () => {
                 </F>
               </CCol>
 
-              {/* Project Assignment — shown when department contains "project" */}
+              {/* Project Assignment — shown only for SDP department */}
               {isProjectDept && (
                 <>
                   <CCol md={12}>
