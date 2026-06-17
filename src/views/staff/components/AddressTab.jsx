@@ -30,9 +30,7 @@ const AddressForm = ({ employeeId, type, initial, canEdit, onSave }) => {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [form, setForm] = useState(
-    initial || emptyAddr(type),
-  )
+  const [form, setForm] = useState(initial || emptyAddr(type))
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const handleSave = async (e) => {
@@ -61,11 +59,20 @@ const AddressForm = ({ employeeId, type, initial, canEdit, onSave }) => {
           <CRow className="g-3">
             <CCol md={12}>
               <CFormLabel>Address Line 1 *</CFormLabel>
-              <CFormInput value={form.address_line1} onChange={set('address_line1')} disabled={!editing} required />
+              <CFormInput
+                value={form.address_line1}
+                onChange={set('address_line1')}
+                disabled={!editing}
+                required
+              />
             </CCol>
             <CCol md={12}>
               <CFormLabel>Address Line 2</CFormLabel>
-              <CFormInput value={form.address_line2} onChange={set('address_line2')} disabled={!editing} />
+              <CFormInput
+                value={form.address_line2}
+                onChange={set('address_line2')}
+                disabled={!editing}
+              />
             </CCol>
             <CCol md={4}>
               <CFormLabel>City</CFormLabel>
@@ -81,7 +88,11 @@ const AddressForm = ({ employeeId, type, initial, canEdit, onSave }) => {
             </CCol>
             <CCol md={6}>
               <CFormLabel>Resident Location</CFormLabel>
-              <CFormInput value={form.resident_location} onChange={set('resident_location')} disabled={!editing} />
+              <CFormInput
+                value={form.resident_location}
+                onChange={set('resident_location')}
+                disabled={!editing}
+              />
             </CCol>
             <CCol md={6}>
               <CFormLabel>Country</CFormLabel>
@@ -96,7 +107,12 @@ const AddressForm = ({ employeeId, type, initial, canEdit, onSave }) => {
                     {saving && <CSpinner size="sm" className="me-2" />}
                     Save
                   </CButton>
-                  <CButton color="secondary" type="button" onClick={() => setEditing(false)} disabled={saving}>
+                  <CButton
+                    color="secondary"
+                    type="button"
+                    onClick={() => setEditing(false)}
+                    disabled={saving}
+                  >
                     Cancel
                   </CButton>
                 </>
@@ -126,8 +142,20 @@ const AddressTab = ({ employeeId, addresses, canEdit, onSave }) => {
   const permanent = addresses?.find((a) => a.address_type === 'Permanent')
   return (
     <>
-      <AddressForm employeeId={employeeId} type="Present" initial={present} canEdit={canEdit} onSave={onSave} />
-      <AddressForm employeeId={employeeId} type="Permanent" initial={permanent} canEdit={canEdit} onSave={onSave} />
+      <AddressForm
+        employeeId={employeeId}
+        type="Present"
+        initial={present}
+        canEdit={canEdit}
+        onSave={onSave}
+      />
+      <AddressForm
+        employeeId={employeeId}
+        type="Permanent"
+        initial={permanent}
+        canEdit={canEdit}
+        onSave={onSave}
+      />
     </>
   )
 }

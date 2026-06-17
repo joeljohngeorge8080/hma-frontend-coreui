@@ -1,15 +1,6 @@
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
-import {
-  CAlert,
-  CButton,
-  CCol,
-  CForm,
-  CFormInput,
-  CFormLabel,
-  CRow,
-  CSpinner,
-} from '@coreui/react'
+import { CAlert, CButton, CCol, CForm, CFormInput, CFormLabel, CRow, CSpinner } from '@coreui/react'
 import api from '../../../services/api'
 
 const ContactTab = ({ employeeId, contact, canEdit, onSave }) => {
@@ -47,23 +38,47 @@ const ContactTab = ({ employeeId, contact, canEdit, onSave }) => {
       <CRow className="g-3">
         <CCol md={6}>
           <CFormLabel>Personal Email</CFormLabel>
-          <CFormInput type="email" value={form.personal_email} onChange={set('personal_email')} disabled={!editing} />
+          <CFormInput
+            type="email"
+            value={form.personal_email}
+            onChange={set('personal_email')}
+            disabled={!editing}
+          />
         </CCol>
         <CCol md={6}>
           <CFormLabel>Working Email *</CFormLabel>
-          <CFormInput type="email" value={form.working_email} onChange={set('working_email')} disabled={!editing} required />
+          <CFormInput
+            type="email"
+            value={form.working_email}
+            onChange={set('working_email')}
+            disabled={!editing}
+            required
+          />
         </CCol>
         <CCol md={4}>
           <CFormLabel>Mobile Number *</CFormLabel>
-          <CFormInput value={form.mobile_number} onChange={set('mobile_number')} disabled={!editing} required />
+          <CFormInput
+            value={form.mobile_number}
+            onChange={set('mobile_number')}
+            disabled={!editing}
+            required
+          />
         </CCol>
         <CCol md={4}>
           <CFormLabel>Phone Number</CFormLabel>
-          <CFormInput value={form.phone_number} onChange={set('phone_number')} disabled={!editing} />
+          <CFormInput
+            value={form.phone_number}
+            onChange={set('phone_number')}
+            disabled={!editing}
+          />
         </CCol>
         <CCol md={4}>
           <CFormLabel>Emergency Contact</CFormLabel>
-          <CFormInput value={form.emergency_contact} onChange={set('emergency_contact')} disabled={!editing} />
+          <CFormInput
+            value={form.emergency_contact}
+            onChange={set('emergency_contact')}
+            disabled={!editing}
+          />
         </CCol>
       </CRow>
       {canEdit && (
@@ -74,7 +89,12 @@ const ContactTab = ({ employeeId, contact, canEdit, onSave }) => {
                 {saving && <CSpinner size="sm" className="me-2" />}
                 Save
               </CButton>
-              <CButton color="secondary" type="button" onClick={() => setEditing(false)} disabled={saving}>
+              <CButton
+                color="secondary"
+                type="button"
+                onClick={() => setEditing(false)}
+                disabled={saving}
+              >
                 Cancel
               </CButton>
             </>

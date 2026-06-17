@@ -31,7 +31,12 @@ const BankAccountTab = ({ employeeId, bankAccounts, canEdit, onSave }) => {
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [form, setForm] = useState({ bank_name: '', account_number: '', ifsc_code: '', is_primary: false })
+  const [form, setForm] = useState({
+    bank_name: '',
+    account_number: '',
+    ifsc_code: '',
+    is_primary: false,
+  })
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const handleAdd = async (e) => {
@@ -107,7 +112,12 @@ const BankAccountTab = ({ employeeId, bankAccounts, canEdit, onSave }) => {
               </CCol>
               <CCol md={6}>
                 <CFormLabel>IFSC Code *</CFormLabel>
-                <CFormInput value={form.ifsc_code} onChange={set('ifsc_code')} placeholder="SBIN0001234" required />
+                <CFormInput
+                  value={form.ifsc_code}
+                  onChange={set('ifsc_code')}
+                  placeholder="SBIN0001234"
+                  required
+                />
               </CCol>
               <CCol md={12}>
                 <CFormCheck

@@ -1,15 +1,6 @@
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
-import {
-  CAlert,
-  CButton,
-  CCol,
-  CForm,
-  CFormInput,
-  CFormLabel,
-  CRow,
-  CSpinner,
-} from '@coreui/react'
+import { CAlert, CButton, CCol, CForm, CFormInput, CFormLabel, CRow, CSpinner } from '@coreui/react'
 import api from '../../../services/api'
 
 const GovernmentIdsTab = ({ employeeId, identification, canEdit, onSave }) => {
@@ -72,7 +63,12 @@ const GovernmentIdsTab = ({ employeeId, identification, canEdit, onSave }) => {
                 {saving && <CSpinner size="sm" className="me-2" />}
                 Save
               </CButton>
-              <CButton color="secondary" type="button" onClick={() => setEditing(false)} disabled={saving}>
+              <CButton
+                color="secondary"
+                type="button"
+                onClick={() => setEditing(false)}
+                disabled={saving}
+              >
                 Cancel
               </CButton>
             </>

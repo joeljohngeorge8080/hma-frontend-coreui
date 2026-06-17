@@ -64,15 +64,30 @@ const EmploymentTab = ({ profile, canEdit, onSave }) => {
       <CRow className="g-3">
         <CCol md={6}>
           <CFormLabel>Designation *</CFormLabel>
-          <CFormInput value={form.designation} onChange={set('designation')} disabled={!editing} required />
+          <CFormInput
+            value={form.designation}
+            onChange={set('designation')}
+            disabled={!editing}
+            required
+          />
         </CCol>
         <CCol md={6}>
           <CFormLabel>Department *</CFormLabel>
-          <CFormInput value={form.department} onChange={set('department')} disabled={!editing} required />
+          <CFormInput
+            value={form.department}
+            onChange={set('department')}
+            disabled={!editing}
+            required
+          />
         </CCol>
         <CCol md={4}>
           <CFormLabel>Employee Category *</CFormLabel>
-          <CFormSelect value={form.employee_category} onChange={set('employee_category')} disabled={!editing} required>
+          <CFormSelect
+            value={form.employee_category}
+            onChange={set('employee_category')}
+            disabled={!editing}
+            required
+          >
             {CATEGORY_OPTIONS.map((c) => (
               <option key={c}>{c}</option>
             ))}
@@ -80,11 +95,22 @@ const EmploymentTab = ({ profile, canEdit, onSave }) => {
         </CCol>
         <CCol md={4}>
           <CFormLabel>State for PT *</CFormLabel>
-          <CFormInput value={form.state_for_pt} onChange={set('state_for_pt')} disabled={!editing} required />
+          <CFormInput
+            value={form.state_for_pt}
+            onChange={set('state_for_pt')}
+            disabled={!editing}
+            required
+          />
         </CCol>
         <CCol md={4}>
           <CFormLabel>Joining Date *</CFormLabel>
-          <CFormInput type="date" value={form.joining_date} onChange={set('joining_date')} disabled={!editing} required />
+          <CFormInput
+            type="date"
+            value={form.joining_date}
+            onChange={set('joining_date')}
+            disabled={!editing}
+            required
+          />
         </CCol>
         <CCol md={4}>
           <CFormLabel>Status *</CFormLabel>
@@ -97,7 +123,13 @@ const EmploymentTab = ({ profile, canEdit, onSave }) => {
         {(form.status === 'Resigned' || form.status === 'Retired') && (
           <CCol md={4}>
             <CFormLabel>Exit Date *</CFormLabel>
-            <CFormInput type="date" value={form.exit_date} onChange={set('exit_date')} disabled={!editing} required />
+            <CFormInput
+              type="date"
+              value={form.exit_date}
+              onChange={set('exit_date')}
+              disabled={!editing}
+              required
+            />
           </CCol>
         )}
       </CRow>
@@ -109,7 +141,12 @@ const EmploymentTab = ({ profile, canEdit, onSave }) => {
                 {saving && <CSpinner size="sm" className="me-2" />}
                 Save
               </CButton>
-              <CButton color="secondary" type="button" onClick={() => setEditing(false)} disabled={saving}>
+              <CButton
+                color="secondary"
+                type="button"
+                onClick={() => setEditing(false)}
+                disabled={saving}
+              >
                 Cancel
               </CButton>
             </>

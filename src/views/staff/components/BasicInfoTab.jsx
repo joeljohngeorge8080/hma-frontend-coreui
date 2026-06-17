@@ -53,7 +53,12 @@ const BasicInfoTab = ({ profile, canEdit, onSave }) => {
       <CRow className="g-3">
         <CCol md={4}>
           <CFormLabel>First Name *</CFormLabel>
-          <CFormInput value={form.first_name} onChange={set('first_name')} disabled={!editing} required />
+          <CFormInput
+            value={form.first_name}
+            onChange={set('first_name')}
+            disabled={!editing}
+            required
+          />
         </CCol>
         <CCol md={4}>
           <CFormLabel>Middle Name</CFormLabel>
@@ -61,7 +66,12 @@ const BasicInfoTab = ({ profile, canEdit, onSave }) => {
         </CCol>
         <CCol md={4}>
           <CFormLabel>Last Name *</CFormLabel>
-          <CFormInput value={form.last_name} onChange={set('last_name')} disabled={!editing} required />
+          <CFormInput
+            value={form.last_name}
+            onChange={set('last_name')}
+            disabled={!editing}
+            required
+          />
         </CCol>
         <CCol md={4}>
           <CFormLabel>Gender *</CFormLabel>
@@ -73,11 +83,21 @@ const BasicInfoTab = ({ profile, canEdit, onSave }) => {
         </CCol>
         <CCol md={4}>
           <CFormLabel>Date of Birth *</CFormLabel>
-          <CFormInput type="date" value={form.date_of_birth} onChange={set('date_of_birth')} disabled={!editing} required />
+          <CFormInput
+            type="date"
+            value={form.date_of_birth}
+            onChange={set('date_of_birth')}
+            disabled={!editing}
+            required
+          />
         </CCol>
         <CCol md={4}>
           <CFormLabel>Marital Status</CFormLabel>
-          <CFormSelect value={form.marital_status} onChange={set('marital_status')} disabled={!editing}>
+          <CFormSelect
+            value={form.marital_status}
+            onChange={set('marital_status')}
+            disabled={!editing}
+          >
             <option value="">— Select —</option>
             {MARITAL_OPTIONS.map((m) => (
               <option key={m}>{m}</option>
@@ -86,7 +106,12 @@ const BasicInfoTab = ({ profile, canEdit, onSave }) => {
         </CCol>
         <CCol md={4}>
           <CFormLabel>Blood Group</CFormLabel>
-          <CFormInput value={form.blood_group} onChange={set('blood_group')} disabled={!editing} placeholder="e.g. O+" />
+          <CFormInput
+            value={form.blood_group}
+            onChange={set('blood_group')}
+            disabled={!editing}
+            placeholder="e.g. O+"
+          />
         </CCol>
       </CRow>
 
@@ -98,7 +123,12 @@ const BasicInfoTab = ({ profile, canEdit, onSave }) => {
                 {saving && <CSpinner size="sm" className="me-2" />}
                 Save
               </CButton>
-              <CButton color="secondary" type="button" onClick={() => setEditing(false)} disabled={saving}>
+              <CButton
+                color="secondary"
+                type="button"
+                onClick={() => setEditing(false)}
+                disabled={saving}
+              >
                 Cancel
               </CButton>
             </>

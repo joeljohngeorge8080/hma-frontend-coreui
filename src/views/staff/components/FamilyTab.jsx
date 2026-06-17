@@ -25,7 +25,14 @@ import CIcon from '@coreui/icons-react'
 import { cilPlus } from '@coreui/icons'
 import api from '../../../services/api'
 
-const empty = { name: '', relationship: '', contact_number: '', date_of_birth: '', aadhar_number: '', pan_number: '' }
+const empty = {
+  name: '',
+  relationship: '',
+  contact_number: '',
+  date_of_birth: '',
+  aadhar_number: '',
+  pan_number: '',
+}
 
 const FamilyTab = ({ employeeId, familyMembers, canEdit, onSave }) => {
   const [showModal, setShowModal] = useState(false)
@@ -111,7 +118,12 @@ const FamilyTab = ({ employeeId, familyMembers, canEdit, onSave }) => {
               </CCol>
               <CCol md={6}>
                 <CFormLabel>Relationship *</CFormLabel>
-                <CFormInput value={form.relationship} onChange={set('relationship')} placeholder="e.g. Father, Spouse" required />
+                <CFormInput
+                  value={form.relationship}
+                  onChange={set('relationship')}
+                  placeholder="e.g. Father, Spouse"
+                  required
+                />
               </CCol>
               <CCol md={6}>
                 <CFormLabel>Contact Number</CFormLabel>
@@ -119,15 +131,27 @@ const FamilyTab = ({ employeeId, familyMembers, canEdit, onSave }) => {
               </CCol>
               <CCol md={6}>
                 <CFormLabel>Date of Birth</CFormLabel>
-                <CFormInput type="date" value={form.date_of_birth} onChange={set('date_of_birth')} />
+                <CFormInput
+                  type="date"
+                  value={form.date_of_birth}
+                  onChange={set('date_of_birth')}
+                />
               </CCol>
               <CCol md={6}>
                 <CFormLabel>Aadhar Number</CFormLabel>
-                <CFormInput value={form.aadhar_number} onChange={set('aadhar_number')} placeholder="12 digits" />
+                <CFormInput
+                  value={form.aadhar_number}
+                  onChange={set('aadhar_number')}
+                  placeholder="12 digits"
+                />
               </CCol>
               <CCol md={6}>
                 <CFormLabel>PAN Number</CFormLabel>
-                <CFormInput value={form.pan_number} onChange={set('pan_number')} placeholder="ABCDE1234F" />
+                <CFormInput
+                  value={form.pan_number}
+                  onChange={set('pan_number')}
+                  placeholder="ABCDE1234F"
+                />
               </CCol>
             </CRow>
           </CModalBody>
