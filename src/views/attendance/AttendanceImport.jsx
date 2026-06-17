@@ -20,27 +20,22 @@ import {
   CTableRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import {
-  cilArrowLeft,
-  cilCheckCircle,
-  cilCloudUpload,
-  cilInfo,
-  cilWarning,
-  cilX,
-} from '@coreui/icons'
+import { cilArrowLeft, cilCheckCircle, cilCloudUpload, cilWarning, cilX } from '@coreui/icons'
 import { useSelector } from 'react-redux'
 
 import { usePermission } from '../../hooks/usePermission'
 import { MODULE } from '../../constants/modules'
 import { parseAttendanceExcel } from '../../services/attendanceParser'
 import { localAttendance } from '../../services/localAttendance'
+import { localEmployees } from '../../services/localEmployees'
 import api from '../../services/api'
 
-// ─── Business Rules (from 03_Business_Rules.md) ───────────────────────────────
-const SHIFT_START_MINUTES = 9 * 60 + 15 // 09:15
-const FREE_LATE_UNITS = 7 // free late-entry units per month
-const LATE_UNIT_MINUTES = 15 // 1 unit = 15 minutes
-const HALF_DAY_LATE_THRESHOLD = 60 // >60 min late → must be Half Day
+// ─── Business Rules constants (03_Business_Rules.md) ─────────────────────────
+const FREE_LATE_UNITS = 7 // free units per month
+const LATE_UNIT_MIN = 15 // 1 unit = 15 minutes
+const HALF_DAY_THRESHOLD_MIN = 60 // ≥60 min late → Half Day (priority rule)
+const HALF_DAY_DEDUCTION_HOURS = 4 // Half Day = 4 hrs deduction
+const CL_MONTHLY_LIMIT = 1 // Casual Leave: 1 per month
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -51,13 +46,106 @@ const toMin = (hhmm) => {
 }
 
 const fmtHHMM = (totalMin) => {
-  if (!totalMin) return '00:00'
+  if (!totalMin) return '—'
   const h = Math.floor(totalMin / 60)
   const m = totalMin % 60
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-// Apply business rules to a flat array of daily records and produce per-employee summary
+const fmtHrs = (min) => (min / 60).toFixed(2)
+
+// Generate plain-language remarks explaining each deduction trigger.
+// Salary figures are symbolic (× DS / × HS) since actual salary is in Payroll module.
+const generateRemarks = (e) => {
+  const remarks = []
+
+  // ── Absent deduction ──────────────────────────────────────────────────────
+  // Leave excess: on_leave > monthly limit → excess treated as Absent
+  const leaveExcess = Math.max(0, e.on_leave - CL_MONTHLY_LIMIT)
+  const effectiveAbsent = e.absent + leaveExcess
+
+  if (e.on_leave > CL_MONTHLY_LIMIT) {
+    remarks.push({
+      type: 'leave',
+      icon: '📋',
+      label: 'Leave Exceeded',
+      text:
+        `Leave used: ${e.on_leave} day${e.on_leave > 1 ? 's' : ''} (monthly limit: ${CL_MONTHLY_LIMIT}). ` +
+        `${leaveExcess} excess day${leaveExcess > 1 ? 's' : ''} treated as Absent.`,
+    })
+  }
+
+  if (effectiveAbsent > 0) {
+    remarks.push({
+      type: 'absent',
+      icon: '🔴',
+      label: 'Absent Deduction',
+      text:
+        `${effectiveAbsent} absent day${effectiveAbsent > 1 ? 's' : ''}` +
+        (leaveExcess > 0 ? ` (${e.absent} actual + ${leaveExcess} from excess leave)` : '') +
+        ` → Deduction = ${effectiveAbsent} × Daily Salary (DS)`,
+    })
+  }
+
+  // ── Half Day deduction (Priority Rule) ────────────────────────────────────
+  // Pace-marked Half Days + HMA rule violations (≥60 min late but marked Present)
+  const totalHalfDays = e.half_day + e.hd_violations.length
+
+  if (totalHalfDays > 0) {
+    const parts = []
+    if (e.half_day > 0) parts.push(`${e.half_day} marked by Pace`)
+    if (e.hd_violations.length > 0) {
+      const dates = e.hd_violations.map((v) => `${v.date} (${v.late_by} late)`).join(', ')
+      parts.push(
+        `${e.hd_violations.length} HMA rule violation${e.hd_violations.length > 1 ? 's' : ''}: ${dates}`,
+      )
+    }
+    remarks.push({
+      type: 'halfday',
+      icon: '🟠',
+      label: 'Half Day Deduction',
+      text:
+        `${totalHalfDays} Half Day${totalHalfDays > 1 ? 's' : ''} (${parts.join(' + ')}). ` +
+        `Rule: arrived ≥60 min late → 4-hr deduction (priority over late units). ` +
+        `Deduction = ${totalHalfDays} × ${HALF_DAY_DEDUCTION_HOURS} × Hourly Salary (HS)`,
+    })
+  }
+
+  // ── Late entry deduction (excess units only; HD days excluded by priority rule) ──
+  if (e.excess_units > 0) {
+    const excessHrs = fmtHrs(e.excess_units * LATE_UNIT_MIN)
+    remarks.push({
+      type: 'late',
+      icon: '🟡',
+      label: 'Late Entry Deduction',
+      text:
+        `Late units used: ${e.normal_late_units} (7 free). ` +
+        `Excess: ${e.excess_units} unit${e.excess_units > 1 ? 's' : ''} ` +
+        `(${e.excess_units} × 15 min = ${e.excess_units * LATE_UNIT_MIN} min = ${excessHrs} hrs). ` +
+        `Deduction = ${excessHrs} × HS`,
+    })
+  } else if (e.normal_late_units > 0) {
+    remarks.push({
+      type: 'late_ok',
+      icon: '🟢',
+      label: 'Late Entry — Within Limit',
+      text: `Late units used: ${e.normal_late_units} / 7 free. ` + `No deduction.`,
+    })
+  }
+
+  if (remarks.filter((r) => ['absent', 'halfday', 'late'].includes(r.type)).length === 0) {
+    remarks.push({
+      type: 'clean',
+      icon: '✅',
+      label: 'No Deductions',
+      text: 'Full salary. No absent days, no excess late units, no half-day triggers.',
+    })
+  }
+
+  return remarks
+}
+
+// ─── Core summary builder ────────────────────────────────────────────────────
 const buildEmployeeSummaries = (rows) => {
   const map = {}
 
@@ -72,13 +160,12 @@ const buildEmployeeSummaries = (rows) => {
         weekly_off: 0,
         holiday: 0,
         on_leave: 0,
-        late_days: 0,
-        total_late_minutes: 0,
+        // Late split: normal (<60 min) vs half-day (≥60 min, priority rule applies)
+        normal_late_days: 0,
+        normal_late_minutes: 0, // <60 min late days → contribute to units
+        hd_violations: [], // ≥60 min late but Pace marked Present → HD rule
         total_work_minutes: 0,
         work_days_with_duration: 0,
-        // Days where Pace marked the employee as Present but late > 60 min
-        // → business rule says should be Half Day
-        half_day_rule_violations: [],
       }
     }
 
@@ -108,12 +195,13 @@ const buildEmployeeSummaries = (rows) => {
     if (r.late_by) {
       const lateMin = toMin(r.late_by)
       if (lateMin > 0) {
-        e.late_days++
-        e.total_late_minutes += lateMin
-
-        // Half-day rule: >60 min late should be Half Day
-        if (lateMin > HALF_DAY_LATE_THRESHOLD && r.status === 'Present') {
-          e.half_day_rule_violations.push({ date: r.date, late_by: r.late_by })
+        if (lateMin >= HALF_DAY_THRESHOLD_MIN && r.status === 'Present') {
+          // Priority Rule: ≥60 min late → Half Day; these minutes do NOT count as late units
+          e.hd_violations.push({ date: r.date, late_by: r.late_by, lateMin })
+        } else {
+          // Normal late entry <60 min → counts toward 7 free units
+          e.normal_late_days++
+          e.normal_late_minutes += lateMin
         }
       }
     }
@@ -129,26 +217,28 @@ const buildEmployeeSummaries = (rows) => {
 
   return Object.values(map)
     .map((e) => {
-      // Late entry analysis per business rules
-      const totalLateUnits = Math.ceil(e.total_late_minutes / LATE_UNIT_MINUTES)
-      const freeUnitsUsed = Math.min(FREE_LATE_UNITS, totalLateUnits)
+      const totalLateUnits = Math.ceil(e.normal_late_minutes / LATE_UNIT_MIN)
       const excessUnits = Math.max(0, totalLateUnits - FREE_LATE_UNITS)
-      const excessMinutes = excessUnits * LATE_UNIT_MINUTES
       const avgWorkMin =
         e.work_days_with_duration > 0
           ? Math.round(e.total_work_minutes / e.work_days_with_duration)
           : 0
 
-      return {
+      const enriched = {
         ...e,
-        total_late_units: totalLateUnits,
-        free_units_used: freeUnitsUsed,
-        free_units_remaining: Math.max(0, FREE_LATE_UNITS - totalLateUnits),
+        normal_late_units: totalLateUnits,
         excess_units: excessUnits,
-        excess_minutes: excessMinutes,
+        free_units_remaining: Math.max(0, FREE_LATE_UNITS - totalLateUnits),
+        total_half_days: e.half_day + e.hd_violations.length,
+        effective_absent: e.absent + Math.max(0, e.on_leave - CL_MONTHLY_LIMIT),
         avg_work_hhmm: fmtHHMM(avgWorkMin),
-        total_late_hhmm: fmtHHMM(e.total_late_minutes),
+        normal_late_hhmm: fmtHHMM(e.normal_late_minutes),
       }
+      enriched.remarks = generateRemarks(enriched)
+      enriched.has_deduction = enriched.remarks.some((r) =>
+        ['absent', 'halfday', 'late'].includes(r.type),
+      )
+      return enriched
     })
     .sort((a, b) => a.employee_id.localeCompare(b.employee_id))
 }
@@ -212,6 +302,193 @@ const Step = ({ n, label, active, done }) => (
   </div>
 )
 
+// ─── Deduction Summary component (Step 4) ────────────────────────────────────
+// For each employee, looks up their current_salary from local store and
+// calculates the exact deduction. Employees with no salary record show as
+// "Salary not on file" — the total only sums rows where salary is known.
+const DeductionSummary = ({ summaries, month, year }) => {
+  const rows = summaries.map((e) => {
+    // Working days = all days excluding weekly off + holidays
+    const workingDays = e.present + e.absent + e.half_day + e.on_leave + e.hd_violations.length
+
+    let salary = null
+    try {
+      const emp = localEmployees.getById(e.employee_id)
+      salary = emp?.current_salary ? parseFloat(emp.current_salary) : null
+    } catch {
+      salary = null
+    }
+
+    let deduction = null
+    if (salary !== null && workingDays > 0) {
+      const ds = salary / workingDays // Daily Salary
+      const hs = ds / 8 // Hourly Salary
+
+      const absentDeduction = e.effective_absent * ds
+      const hdDeduction = e.total_half_days * HALF_DAY_DEDUCTION_HOURS * hs
+      const lateDeduction = ((e.excess_units * LATE_UNIT_MIN) / 60) * hs
+
+      deduction = absentDeduction + hdDeduction + lateDeduction
+    }
+
+    return { ...e, salary, deduction, workingDays }
+  })
+
+  const knownRows = rows.filter((r) => r.deduction !== null)
+  const missingCount = rows.length - knownRows.length
+  const totalDeduction = knownRows.reduce((sum, r) => sum + r.deduction, 0)
+  const deductionRows = rows.filter((r) => r.has_deduction)
+
+  return (
+    <CCard>
+      <CCardHeader className="d-flex align-items-center justify-content-between">
+        <strong>
+          Salary Deduction Summary —{' '}
+          {
+            [
+              '',
+              'January',
+              'February',
+              'March',
+              'April',
+              'May',
+              'June',
+              'July',
+              'August',
+              'September',
+              'October',
+              'November',
+              'December',
+            ][month]
+          }{' '}
+          {year}
+        </strong>
+        <span className="text-body-secondary small">
+          {deductionRows.length} of {rows.length} employees have deductions
+        </span>
+      </CCardHeader>
+      <CCardBody className="p-0">
+        {missingCount > 0 && (
+          <div className="px-3 py-2 border-bottom bg-warning-subtle small text-dark">
+            ⚠️ {missingCount} employee{missingCount > 1 ? 's' : ''} missing salary data — their
+            deductions are excluded from the total. Add salary via Staff → Employee Profile → Salary
+            tab.
+          </div>
+        )}
+
+        <CTable hover bordered small className="mb-0">
+          <CTableHead color="light">
+            <CTableRow>
+              <CTableHeaderCell>Employee</CTableHeaderCell>
+              <CTableHeaderCell className="text-center">Monthly Salary</CTableHeaderCell>
+              <CTableHeaderCell className="text-center">Working Days</CTableHeaderCell>
+              <CTableHeaderCell className="text-center">Daily Salary (DS)</CTableHeaderCell>
+              <CTableHeaderCell className="text-center">Absent</CTableHeaderCell>
+              <CTableHeaderCell className="text-center">Half Days</CTableHeaderCell>
+              <CTableHeaderCell className="text-center">Excess Late</CTableHeaderCell>
+              <CTableHeaderCell className="text-center fw-bold">Total Deduction</CTableHeaderCell>
+            </CTableRow>
+          </CTableHead>
+          <CTableBody>
+            {rows.map((r) => {
+              const hasSalary = r.salary !== null && r.workingDays > 0
+              const ds = hasSalary ? r.salary / r.workingDays : null
+              const hs = ds ? ds / 8 : null
+              const absentAmt = hasSalary ? r.effective_absent * ds : null
+              const hdAmt = hasSalary ? r.total_half_days * HALF_DAY_DEDUCTION_HOURS * hs : null
+              const lateAmt = hasSalary ? ((r.excess_units * LATE_UNIT_MIN) / 60) * hs : null
+
+              return (
+                <CTableRow
+                  key={r.employee_id}
+                  className={r.has_deduction && hasSalary ? 'table-danger' : ''}
+                >
+                  <CTableDataCell>
+                    <div className="fw-semibold small">{r.employee_id}</div>
+                    <div className="text-body-secondary" style={{ fontSize: '0.72rem' }}>
+                      {r.employee_name}
+                    </div>
+                  </CTableDataCell>
+                  <CTableDataCell className="text-center small">
+                    {r.salary !== null ? (
+                      `₹ ${r.salary.toLocaleString('en-IN')}`
+                    ) : (
+                      <span className="text-danger small">Not on file</span>
+                    )}
+                  </CTableDataCell>
+                  <CTableDataCell className="text-center small text-body-secondary">
+                    {r.workingDays}
+                  </CTableDataCell>
+                  <CTableDataCell className="text-center small">
+                    {ds ? `₹ ${ds.toFixed(2)}` : '—'}
+                  </CTableDataCell>
+                  <CTableDataCell className="text-center small">
+                    {absentAmt > 0 ? (
+                      <span className="text-danger">− ₹ {absentAmt.toFixed(2)}</span>
+                    ) : (
+                      <span className="text-body-secondary">—</span>
+                    )}
+                  </CTableDataCell>
+                  <CTableDataCell className="text-center small">
+                    {hdAmt > 0 ? (
+                      <span className="text-dark">− ₹ {hdAmt.toFixed(2)}</span>
+                    ) : (
+                      <span className="text-body-secondary">—</span>
+                    )}
+                  </CTableDataCell>
+                  <CTableDataCell className="text-center small">
+                    {lateAmt > 0 ? (
+                      <span className="text-dark">− ₹ {lateAmt.toFixed(2)}</span>
+                    ) : (
+                      <span className="text-body-secondary">—</span>
+                    )}
+                  </CTableDataCell>
+                  <CTableDataCell className="text-center">
+                    {r.deduction !== null ? (
+                      r.deduction > 0 ? (
+                        <CBadge color="danger">− ₹ {r.deduction.toFixed(2)}</CBadge>
+                      ) : (
+                        <CBadge color="success">No deduction</CBadge>
+                      )
+                    ) : (
+                      <span className="text-body-secondary small">—</span>
+                    )}
+                  </CTableDataCell>
+                </CTableRow>
+              )
+            })}
+          </CTableBody>
+          <tfoot>
+            <tr style={{ background: 'var(--cui-tertiary-bg, #f8f9fa)', fontWeight: 600 }}>
+              <td colSpan={7} className="px-3 py-2 text-end">
+                Total Deduction
+                {missingCount > 0 && (
+                  <span className="fw-normal text-body-secondary ms-2 small">
+                    ({knownRows.length} of {rows.length} employees)
+                  </span>
+                )}
+              </td>
+              <td className="text-center px-3 py-2">
+                {knownRows.length > 0 ? (
+                  <span className="text-danger fs-6">
+                    − ₹{' '}
+                    {totalDeduction.toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                ) : (
+                  <span className="text-body-secondary small">No salary data yet</span>
+                )}
+              </td>
+            </tr>
+          </tfoot>
+        </CTable>
+      </CCardBody>
+    </CCard>
+  )
+}
+
 const STEPS = [
   'Select Period',
   'Upload & Validate',
@@ -240,6 +517,7 @@ const AttendanceImport = () => {
 
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState(null)
+  const [analysisFilter, setAnalysisFilter] = useState('all') // 'all' | 'deductions' | 'clean'
 
   const fileInputRef = useRef(null)
 
@@ -339,10 +617,14 @@ const AttendanceImport = () => {
 
   // Only computed when entering step 3 (employee analysis)
   const employeeSummaries = step >= 3 ? buildEmployeeSummaries(parsedRows) : []
-  const excessLateCount = employeeSummaries.filter((e) => e.excess_units > 0).length
-  const hdViolationCount = employeeSummaries.filter(
-    (e) => e.half_day_rule_violations.length > 0,
-  ).length
+  const withDeductions = employeeSummaries.filter((e) => e.has_deduction)
+  const cleanEmployees = employeeSummaries.filter((e) => !e.has_deduction)
+  const filteredSummaries =
+    analysisFilter === 'deductions'
+      ? withDeductions
+      : analysisFilter === 'clean'
+        ? cleanEmployees
+        : employeeSummaries
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -593,274 +875,211 @@ const AttendanceImport = () => {
         </CCard>
       )}
 
-      {/* ── Step 3: Employee Analysis (Business Rules) ────────────────────────── */}
+      {/* ── Step 3: Employee Analysis ─────────────────────────────────────────── */}
       {step === 3 && (
         <>
-          {/* Business rules reference card */}
-          <CCard className="mb-3 border-start border-start-info border-4">
-            <CCardBody className="py-2 px-3">
-              <div className="d-flex align-items-start gap-2">
-                <CIcon icon={cilInfo} className="text-info mt-1 flex-shrink-0" />
-                <div className="small">
-                  <strong className="d-block mb-1">
-                    Attendance Rules Applied (03_Business_Rules.md)
-                  </strong>
-                  <span className="text-body-secondary">
-                    Shift: 09:15–17:45 &nbsp;|&nbsp; Free late-entry units: 7/month (1 unit = 15
-                    min) &nbsp;|&nbsp; Excess units: salary deduction at hourly rate &nbsp;|&nbsp;
-                    &gt;60 min late = Half Day (4-hr deduction)
-                  </span>
-                </div>
-              </div>
+          {/* Summary counts */}
+          <CRow className="g-3 mb-3">
+            <CCol xs={4}>
+              <CCard className="border-top border-top-primary border-3 text-center h-100">
+                <CCardBody className="py-2">
+                  <div className="fs-3 fw-bold text-primary">{employeeSummaries.length}</div>
+                  <div className="small text-body-secondary">Total Employees</div>
+                </CCardBody>
+              </CCard>
+            </CCol>
+            <CCol xs={4}>
+              <CCard className="border-top border-top-danger border-3 text-center h-100">
+                <CCardBody className="py-2">
+                  <div className="fs-3 fw-bold text-danger">{withDeductions.length}</div>
+                  <div className="small text-body-secondary">Have Deductions</div>
+                </CCardBody>
+              </CCard>
+            </CCol>
+            <CCol xs={4}>
+              <CCard className="border-top border-top-success border-3 text-center h-100">
+                <CCardBody className="py-2">
+                  <div className="fs-3 fw-bold text-success">{cleanEmployees.length}</div>
+                  <div className="small text-body-secondary">No Deductions</div>
+                </CCardBody>
+              </CCard>
+            </CCol>
+          </CRow>
+
+          {/* Rules legend */}
+          <CCard className="mb-3 border-start border-start-info border-3">
+            <CCardBody className="py-2 px-3 small text-body-secondary">
+              <strong className="text-body me-2">Rules applied:</strong>
+              DS = Monthly Salary ÷ Working Days &nbsp;·&nbsp; HS = DS ÷ 8 &nbsp;·&nbsp; 7 free late
+              units/month (1 unit = 15 min) &nbsp;·&nbsp; ≥60 min late = Half Day (HS × 4),
+              overrides late unit rule
             </CCardBody>
           </CCard>
-
-          {/* Alert banners */}
-          {(excessLateCount > 0 || hdViolationCount > 0) && (
-            <CRow className="g-2 mb-3">
-              {excessLateCount > 0 && (
-                <CCol>
-                  <CAlert color="danger" className="mb-0 py-2 small">
-                    <CIcon icon={cilWarning} className="me-1" />
-                    <strong>
-                      {excessLateCount} employee{excessLateCount > 1 ? 's' : ''}
-                    </strong>{' '}
-                    have exceeded the 7 free late-entry units — salary deduction required.
-                  </CAlert>
-                </CCol>
-              )}
-              {hdViolationCount > 0 && (
-                <CCol>
-                  <CAlert color="warning" className="mb-0 py-2 small">
-                    <CIcon icon={cilWarning} className="me-1" />
-                    <strong>
-                      {hdViolationCount} employee{hdViolationCount > 1 ? 's' : ''}
-                    </strong>{' '}
-                    arrived &gt;60 min late but were not marked Half Day — review before confirming.
-                  </CAlert>
-                </CCol>
-              )}
-            </CRow>
-          )}
 
           <CCard>
-            <CCardHeader className="d-flex align-items-center justify-content-between">
+            <CCardHeader className="d-flex align-items-center justify-content-between flex-wrap gap-2">
               <strong>
-                Employee Analysis — {MONTHS[month - 1]} {year}
+                Employee Deduction Analysis — {MONTHS[month - 1]} {year}
               </strong>
-              <span className="text-body-secondary small">
-                {employeeSummaries.length} employees
-              </span>
+              {/* Filter */}
+              <div className="d-flex gap-1">
+                {[
+                  { key: 'all', label: `All (${employeeSummaries.length})` },
+                  { key: 'deductions', label: `Has Deductions (${withDeductions.length})` },
+                  { key: 'clean', label: `Clean (${cleanEmployees.length})` },
+                ].map(({ key, label }) => (
+                  <CButton
+                    key={key}
+                    size="sm"
+                    color={analysisFilter === key ? 'primary' : 'secondary'}
+                    variant={analysisFilter === key ? undefined : 'outline'}
+                    onClick={() => setAnalysisFilter(key)}
+                  >
+                    {label}
+                  </CButton>
+                ))}
+              </div>
             </CCardHeader>
             <CCardBody className="p-0">
-              <div style={{ overflowX: 'auto' }}>
-                <CTable hover bordered small className="mb-0" style={{ minWidth: 900 }}>
-                  <CTableHead color="light">
-                    <CTableRow>
-                      <CTableHeaderCell rowSpan={2} className="align-middle">
-                        Employee
-                      </CTableHeaderCell>
-                      <CTableHeaderCell colSpan={6} className="text-center border-start">
-                        Attendance
-                      </CTableHeaderCell>
-                      <CTableHeaderCell colSpan={4} className="text-center border-start">
-                        Late Entry (Rule: 7 free units × 15 min)
-                      </CTableHeaderCell>
-                      <CTableHeaderCell rowSpan={2} className="align-middle border-start">
-                        Avg Hours
-                      </CTableHeaderCell>
-                    </CTableRow>
-                    <CTableRow>
-                      {/* Attendance sub-headers */}
-                      <CTableHeaderCell className="border-start text-success">P</CTableHeaderCell>
-                      <CTableHeaderCell className="text-danger">A</CTableHeaderCell>
-                      <CTableHeaderCell className="text-warning">HD</CTableHeaderCell>
-                      <CTableHeaderCell className="text-secondary">W/Off</CTableHeaderCell>
-                      <CTableHeaderCell className="text-primary">Leave</CTableHeaderCell>
-                      <CTableHeaderCell className="text-info">Holiday</CTableHeaderCell>
-                      {/* Late entry sub-headers */}
-                      <CTableHeaderCell className="border-start">Days</CTableHeaderCell>
-                      <CTableHeaderCell>Total Late</CTableHeaderCell>
-                      <CTableHeaderCell>Units (/ 7 free)</CTableHeaderCell>
-                      <CTableHeaderCell>Excess / Penalty</CTableHeaderCell>
-                    </CTableRow>
-                  </CTableHead>
-                  <CTableBody>
-                    {employeeSummaries.map((e) => {
-                      const hasExcess = e.excess_units > 0
-                      const hasHdViolation = e.half_day_rule_violations.length > 0
-                      return (
-                        <CTableRow
-                          key={e.employee_id}
-                          className={hasExcess || hasHdViolation ? 'table-warning' : ''}
-                        >
-                          {/* Employee */}
-                          <CTableDataCell style={{ minWidth: 180 }}>
-                            <div className="fw-semibold">{e.employee_id}</div>
-                            <div className="text-body-secondary small">{e.employee_name}</div>
-                            {hasHdViolation && (
-                              <CBadge color="danger" className="mt-1 small">
-                                HD rule: {e.half_day_rule_violations.length} day
-                                {e.half_day_rule_violations.length > 1 ? 's' : ''}
-                              </CBadge>
-                            )}
-                          </CTableDataCell>
+              <CTable hover bordered small className="mb-0">
+                <CTableHead color="light">
+                  <CTableRow>
+                    <CTableHeaderCell style={{ minWidth: 160 }}>Employee</CTableHeaderCell>
+                    <CTableHeaderCell style={{ minWidth: 160 }}>Attendance</CTableHeaderCell>
+                    <CTableHeaderCell style={{ minWidth: 160 }}>Late Entry</CTableHeaderCell>
+                    <CTableHeaderCell style={{ minWidth: 120 }}>Deductions</CTableHeaderCell>
+                    <CTableHeaderCell style={{ minWidth: 300 }}>
+                      Remarks (How &amp; Why)
+                    </CTableHeaderCell>
+                  </CTableRow>
+                </CTableHead>
+                <CTableBody>
+                  {filteredSummaries.map((e) => (
+                    <CTableRow key={e.employee_id}>
+                      {/* Employee */}
+                      <CTableDataCell>
+                        <div className="fw-semibold small">{e.employee_id}</div>
+                        <div className="text-body-secondary" style={{ fontSize: '0.75rem' }}>
+                          {e.employee_name}
+                        </div>
+                      </CTableDataCell>
 
-                          {/* Attendance counts */}
-                          <CTableDataCell className="text-center border-start">
-                            <CBadge color="success">{e.present}</CBadge>
-                          </CTableDataCell>
-                          <CTableDataCell className="text-center">
-                            {e.absent > 0 ? (
-                              <CBadge color="danger">{e.absent}</CBadge>
-                            ) : (
-                              <span className="text-body-secondary">0</span>
-                            )}
-                          </CTableDataCell>
-                          <CTableDataCell className="text-center">
-                            {e.half_day > 0 ? (
-                              <CBadge color="warning">{e.half_day}</CBadge>
-                            ) : (
-                              <span className="text-body-secondary">0</span>
-                            )}
-                          </CTableDataCell>
-                          <CTableDataCell className="text-center text-body-secondary">
-                            {e.weekly_off}
-                          </CTableDataCell>
-                          <CTableDataCell className="text-center">
-                            {e.on_leave > 0 ? (
-                              <CBadge color="primary">{e.on_leave}</CBadge>
-                            ) : (
-                              <span className="text-body-secondary">0</span>
-                            )}
-                          </CTableDataCell>
-                          <CTableDataCell className="text-center text-body-secondary">
-                            {e.holiday}
-                          </CTableDataCell>
+                      {/* Attendance compact */}
+                      <CTableDataCell>
+                        <div className="d-flex flex-wrap gap-1" style={{ fontSize: '0.75rem' }}>
+                          <span className="text-success fw-semibold">{e.present}P</span>
+                          {e.absent > 0 && <CBadge color="danger">{e.absent}A</CBadge>}
+                          {e.total_half_days > 0 && (
+                            <CBadge color="warning" className="text-dark">
+                              {e.total_half_days}HD
+                            </CBadge>
+                          )}
+                          {e.on_leave > 0 && <CBadge color="primary">{e.on_leave}L</CBadge>}
+                          <span className="text-body-secondary">{e.weekly_off}WO</span>
+                        </div>
+                        <div className="text-body-secondary mt-1" style={{ fontSize: '0.72rem' }}>
+                          Avg: {e.avg_work_hhmm}
+                        </div>
+                      </CTableDataCell>
 
-                          {/* Late entry */}
-                          <CTableDataCell className="text-center border-start">
-                            {e.late_days > 0 ? (
-                              <CBadge color="warning">{e.late_days}</CBadge>
-                            ) : (
-                              <span className="text-body-secondary">0</span>
-                            )}
-                          </CTableDataCell>
-                          <CTableDataCell className="text-center small">
-                            {e.total_late_minutes > 0 ? e.total_late_hhmm : '—'}
-                          </CTableDataCell>
-                          <CTableDataCell className="text-center">
-                            {e.total_late_units === 0 ? (
-                              <span className="text-body-secondary small">—</span>
-                            ) : (
-                              <div style={{ minWidth: 100 }}>
-                                <div className="d-flex justify-content-between small mb-1">
-                                  <span>{e.free_units_used} used</span>
-                                  <span
-                                    className={
-                                      hasExcess ? 'text-danger fw-semibold' : 'text-success'
-                                    }
-                                  >
-                                    {hasExcess
-                                      ? `+${e.excess_units} over`
-                                      : `${e.free_units_remaining} left`}
-                                  </span>
-                                </div>
-                                <CProgress
-                                  value={Math.min(
-                                    100,
-                                    (e.total_late_units / FREE_LATE_UNITS) * 100,
-                                  )}
-                                  color={
-                                    hasExcess
-                                      ? 'danger'
-                                      : e.free_units_used >= 5
-                                        ? 'warning'
-                                        : 'success'
-                                  }
-                                  style={{ height: 6 }}
-                                />
-                              </div>
-                            )}
-                          </CTableDataCell>
-                          <CTableDataCell className="text-center">
-                            {hasExcess ? (
+                      {/* Late entry */}
+                      <CTableDataCell>
+                        {e.normal_late_days === 0 && e.hd_violations.length === 0 ? (
+                          <span className="text-body-secondary small">No late days</span>
+                        ) : (
+                          <div style={{ fontSize: '0.75rem' }}>
+                            {e.normal_late_days > 0 && (
                               <div>
-                                <CBadge color="danger" className="d-block mb-1">
-                                  {e.excess_units} units
-                                </CBadge>
-                                <span className="text-body-secondary small">
-                                  ≈ {e.excess_minutes} min deductible
+                                <span className="fw-semibold">{e.normal_late_days}</span> late day
+                                {e.normal_late_days > 1 ? 's' : ''}
+                                <span className="text-body-secondary ms-1">
+                                  ({e.normal_late_hhmm})
                                 </span>
                               </div>
-                            ) : (
-                              <CBadge color="success">Within limit</CBadge>
                             )}
-                          </CTableDataCell>
+                            {e.normal_late_units > 0 && (
+                              <div>
+                                Units: {e.normal_late_units} / 7
+                                {e.excess_units > 0 ? (
+                                  <CBadge color="danger" className="ms-1">
+                                    +{e.excess_units} excess
+                                  </CBadge>
+                                ) : (
+                                  <CBadge color="success" className="ms-1">
+                                    OK
+                                  </CBadge>
+                                )}
+                              </div>
+                            )}
+                            {e.hd_violations.length > 0 && (
+                              <CBadge color="warning" className="mt-1 text-dark">
+                                {e.hd_violations.length} ≥60 min (HD rule)
+                              </CBadge>
+                            )}
+                          </div>
+                        )}
+                      </CTableDataCell>
 
-                          {/* Avg hours */}
-                          <CTableDataCell className="text-center border-start small">
-                            {e.work_days_with_duration > 0 ? e.avg_work_hhmm : '—'}
-                          </CTableDataCell>
-                        </CTableRow>
-                      )
-                    })}
-                  </CTableBody>
-                </CTable>
-              </div>
+                      {/* Deduction badges */}
+                      <CTableDataCell>
+                        <div className="d-flex flex-column gap-1">
+                          {e.remarks
+                            .filter((r) => ['absent', 'halfday', 'late'].includes(r.type))
+                            .map((r, i) => (
+                              <CBadge
+                                key={i}
+                                color={
+                                  r.type === 'absent'
+                                    ? 'danger'
+                                    : r.type === 'halfday'
+                                      ? 'warning'
+                                      : 'dark'
+                                }
+                                className={`text-start text-wrap${r.type === 'halfday' ? ' text-dark' : ''}`}
+                                style={{ fontSize: '0.72rem', whiteSpace: 'normal' }}
+                              >
+                                {r.icon} {r.label}
+                              </CBadge>
+                            ))}
+                          {!e.has_deduction && (
+                            <CBadge color="success" style={{ fontSize: '0.72rem' }}>
+                              No deductions
+                            </CBadge>
+                          )}
+                        </div>
+                      </CTableDataCell>
+
+                      {/* Remarks */}
+                      <CTableDataCell>
+                        <div className="d-flex flex-column gap-2">
+                          {e.remarks.map((r, i) => (
+                            <div key={i} style={{ fontSize: '0.75rem' }}>
+                              <span
+                                className={
+                                  r.type === 'absent'
+                                    ? 'text-danger fw-semibold'
+                                    : r.type === 'halfday'
+                                      ? 'fw-semibold'
+                                      : r.type === 'late'
+                                        ? 'fw-semibold'
+                                        : r.type === 'clean'
+                                          ? 'text-success'
+                                          : 'text-body-secondary'
+                                }
+                              >
+                                {r.icon} {r.label}:{' '}
+                              </span>
+                              <span className="text-body-secondary">{r.text}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </CTableDataCell>
+                    </CTableRow>
+                  ))}
+                </CTableBody>
+              </CTable>
             </CCardBody>
           </CCard>
-
-          {/* Half-day violation detail */}
-          {hdViolationCount > 0 && (
-            <CCard className="mt-3 border-warning">
-              <CCardHeader className="bg-warning-subtle">
-                <strong>
-                  <CIcon icon={cilWarning} className="me-1" />
-                  Half-Day Rule Violations
-                </strong>
-                <span className="text-body-secondary small ms-2">
-                  Business rule: &gt;60 min late = Half Day (4-hr deduction)
-                </span>
-              </CCardHeader>
-              <CCardBody className="p-0">
-                <CTable small bordered className="mb-0">
-                  <CTableHead color="light">
-                    <CTableRow>
-                      <CTableHeaderCell>Employee ID</CTableHeaderCell>
-                      <CTableHeaderCell>Name</CTableHeaderCell>
-                      <CTableHeaderCell>Date</CTableHeaderCell>
-                      <CTableHeaderCell>Late By</CTableHeaderCell>
-                      <CTableHeaderCell>Pace Status</CTableHeaderCell>
-                      <CTableHeaderCell>Required Status</CTableHeaderCell>
-                    </CTableRow>
-                  </CTableHead>
-                  <CTableBody>
-                    {employeeSummaries
-                      .filter((e) => e.half_day_rule_violations.length > 0)
-                      .flatMap((e) =>
-                        e.half_day_rule_violations.map((v) => (
-                          <CTableRow key={`${e.employee_id}-${v.date}`}>
-                            <CTableDataCell className="fw-semibold">{e.employee_id}</CTableDataCell>
-                            <CTableDataCell>{e.employee_name}</CTableDataCell>
-                            <CTableDataCell>{v.date}</CTableDataCell>
-                            <CTableDataCell>
-                              <CBadge color="danger">{v.late_by}</CBadge>
-                            </CTableDataCell>
-                            <CTableDataCell>
-                              <CBadge color="success">Present</CBadge>
-                            </CTableDataCell>
-                            <CTableDataCell>
-                              <CBadge color="warning">Half Day</CBadge>
-                            </CTableDataCell>
-                          </CTableRow>
-                        )),
-                      )}
-                  </CTableBody>
-                </CTable>
-              </CCardBody>
-            </CCard>
-          )}
 
           <div className="d-flex gap-2 mt-3">
             <CButton color="secondary" variant="outline" onClick={() => setStep(2)}>
@@ -869,59 +1088,74 @@ const AttendanceImport = () => {
             <CButton color="success" onClick={handleConfirmImport} disabled={saving}>
               {saving && <CSpinner size="sm" className="me-2" />}
               <CIcon icon={cilCheckCircle} className="me-1" />
-              Confirm Import
+              Confirm &amp; Import
             </CButton>
           </div>
         </>
       )}
 
-      {/* ── Step 4: Done ──────────────────────────────────────────────────────── */}
+      {/* ── Step 4: Done + Deduction Summary ─────────────────────────────────── */}
       {step === 4 && (
-        <CCard>
-          <CCardBody className="text-center py-5">
-            {saveResult?.success ? (
-              <>
-                <CIcon
-                  icon={cilCheckCircle}
-                  style={{ width: 56, height: 56, color: 'var(--cui-success)' }}
-                />
-                <h5 className="mt-3">Import Successful</h5>
-                <p className="text-body-secondary">
-                  {saveResult.count} attendance records imported for {MONTHS[month - 1]} {year}.
-                </p>
-                <div className="d-flex gap-2 justify-content-center mt-3">
-                  <CButton color="primary" onClick={() => navigate('/attendance')}>
-                    View Attendance
-                  </CButton>
-                  <CButton
-                    color="secondary"
-                    variant="outline"
-                    onClick={() => {
-                      setStep(0)
-                      setFile(null)
-                      setParsedRows([])
-                      setParseErrors([])
-                      setParseWarnings([])
-                      setSaveResult(null)
-                      setPeriodMismatch(null)
-                    }}
-                  >
-                    Import Another
-                  </CButton>
-                </div>
-              </>
-            ) : (
-              <>
+        <>
+          {saveResult?.success ? (
+            <>
+              {/* Success banner */}
+              <CCard className="mb-4 border-top border-top-success border-3">
+                <CCardBody className="py-3 d-flex align-items-center gap-3">
+                  <CIcon
+                    icon={cilCheckCircle}
+                    style={{ width: 40, height: 40, color: 'var(--cui-success)', flexShrink: 0 }}
+                  />
+                  <div>
+                    <div className="fw-bold fs-6">Import Successful</div>
+                    <div className="text-body-secondary small">
+                      {saveResult.count} attendance records imported for {MONTHS[month - 1]} {year}.
+                    </div>
+                  </div>
+                  <div className="ms-auto d-flex gap-2">
+                    <CButton
+                      color="primary"
+                      size="sm"
+                      onClick={() => navigate('/attendance', { state: { year, month } })}
+                    >
+                      View Attendance
+                    </CButton>
+                    <CButton
+                      color="secondary"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setStep(0)
+                        setFile(null)
+                        setParsedRows([])
+                        setParseErrors([])
+                        setParseWarnings([])
+                        setSaveResult(null)
+                        setPeriodMismatch(null)
+                      }}
+                    >
+                      Import Another
+                    </CButton>
+                  </div>
+                </CCardBody>
+              </CCard>
+
+              {/* Deduction Summary */}
+              <DeductionSummary summaries={employeeSummaries} month={month} year={year} />
+            </>
+          ) : (
+            <CCard>
+              <CCardBody className="text-center py-5">
                 <CIcon icon={cilX} style={{ width: 56, height: 56, color: 'var(--cui-danger)' }} />
                 <h5 className="mt-3">Import Failed</h5>
                 <p className="text-body-secondary">{saveResult?.message}</p>
                 <CButton color="secondary" onClick={() => setStep(3)}>
                   ← Back
                 </CButton>
-              </>
-            )}
-          </CCardBody>
-        </CCard>
+              </CCardBody>
+            </CCard>
+          )}
+        </>
       )}
     </>
   )
