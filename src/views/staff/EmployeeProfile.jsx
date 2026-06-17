@@ -4,6 +4,7 @@ import {
   CAlert,
   CBadge,
   CButton,
+  CButtonGroup,
   CCard,
   CCardBody,
   CCardHeader,
@@ -17,7 +18,7 @@ import {
   CTabPane,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilArrowLeft, cilPencil } from '@coreui/icons'
+import { cilArrowLeft, cilFile, cilMoney, cilPencil, cilSwapHorizontal } from '@coreui/icons'
 
 import { usePermission } from '../../hooks/usePermission'
 import { MODULE } from '../../constants/modules'
@@ -32,6 +33,9 @@ import BankAccountTab from './components/BankAccountTab'
 import FamilyTab from './components/FamilyTab'
 import DocumentsTab from './components/DocumentsTab'
 import SalaryTab from './components/SalaryTab'
+import AttendanceSummaryTab from './components/AttendanceSummaryTab'
+import ChangeStatusModal from './components/ChangeStatusModal'
+import SalaryUpdateModal from './components/SalaryUpdateModal'
 
 const STATUS_COLORS = {
   Active: 'success',
@@ -50,6 +54,7 @@ const TABS = [
   { key: 'family', label: 'Family' },
   { key: 'documents', label: 'Documents' },
   { key: 'salary', label: 'Salary & Payroll' },
+  { key: 'attendance', label: 'Attendance' },
 ]
 
 const EmployeeProfile = () => {
@@ -61,6 +66,9 @@ const EmployeeProfile = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('basic')
+
+  const [showChangeStatus, setShowChangeStatus] = useState(false)
+  const [showSalaryUpdate, setShowSalaryUpdate] = useState(false)
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -83,7 +91,7 @@ const EmployeeProfile = () => {
       const { data } = await api.get(`/employees/${id}`)
       setProfile(data)
     } catch {
-      // silent refresh failure — current data stays
+      // silent — stale profile is better than crashing
     }
   }
 
@@ -107,7 +115,11 @@ const EmployeeProfile = () => {
     <>
       <CRow className="mb-3 align-items-center">
         <CCol>
-          <CButton color="link" className="ps-0" onClick={() => navigate('/staff')}>
+          <CButton
+            color="link"
+            className="ps-0 text-decoration-none"
+            onClick={() => navigate('/staff')}
+          >
             <CIcon icon={cilArrowLeft} className="me-1" />
             Back to Staff List
           </CButton>
@@ -115,20 +127,46 @@ const EmployeeProfile = () => {
       </CRow>
 
       <CCard className="mb-4">
-        <CCardHeader className="d-flex justify-content-between align-items-center">
-          <div>
-            <strong className="fs-5">{fullName}</strong>
-            <span className="ms-3 text-body-secondary">{profile.employee_id}</span>
-            <CBadge color={STATUS_COLORS[profile.status] || 'secondary'} className="ms-2">
-              {profile.status}
-            </CBadge>
-          </div>
-          {canEdit && (
-            <CButton color="primary" size="sm" onClick={() => navigate(`/staff/${id}/edit`)}>
-              <CIcon icon={cilPencil} className="me-1" />
-              Edit Employee
-            </CButton>
-          )}
+        <CCardHeader>
+          {/* Employee identity */}
+          <CRow className="align-items-center g-2">
+            <CCol>
+              <div className="d-flex align-items-center flex-wrap gap-2">
+                <strong className="fs-5">{fullName}</strong>
+                <span className="text-body-secondary">{profile.employee_id}</span>
+                <CBadge color={STATUS_COLORS[profile.status] || 'secondary'}>
+                  {profile.status}
+                </CBadge>
+                <span className="text-body-secondary small">
+                  {profile.designation} &bull; {profile.department}
+                </span>
+              </div>
+            </CCol>
+
+            {/* HR-only action buttons */}
+            {canEdit && (
+              <CCol xs="auto">
+                <CButtonGroup>
+                  <CButton color="primary" size="sm" onClick={() => navigate(`/staff/${id}/edit`)}>
+                    <CIcon icon={cilPencil} className="me-1" />
+                    Edit
+                  </CButton>
+                  <CButton color="warning" size="sm" onClick={() => setShowChangeStatus(true)}>
+                    <CIcon icon={cilSwapHorizontal} className="me-1" />
+                    Change Status
+                  </CButton>
+                  <CButton color="secondary" size="sm" onClick={() => setActiveTab('documents')}>
+                    <CIcon icon={cilFile} className="me-1" />
+                    Upload Document
+                  </CButton>
+                  <CButton color="success" size="sm" onClick={() => setShowSalaryUpdate(true)}>
+                    <CIcon icon={cilMoney} className="me-1" />
+                    Update Salary
+                  </CButton>
+                </CButtonGroup>
+              </CCol>
+            )}
+          </CRow>
         </CCardHeader>
 
         <CCardBody className="p-0">
@@ -204,9 +242,32 @@ const EmployeeProfile = () => {
                 onSave={refreshProfile}
               />
             </CTabPane>
+            <CTabPane visible={activeTab === 'attendance'}>
+              <AttendanceSummaryTab employeeId={id} />
+            </CTabPane>
           </CTabContent>
         </CCardBody>
       </CCard>
+
+      {/* HR-only modals */}
+      {canEdit && (
+        <>
+          <ChangeStatusModal
+            visible={showChangeStatus}
+            onClose={() => setShowChangeStatus(false)}
+            employeeId={id}
+            currentStatus={profile.status}
+            onSave={refreshProfile}
+          />
+          <SalaryUpdateModal
+            visible={showSalaryUpdate}
+            onClose={() => setShowSalaryUpdate(false)}
+            employeeId={id}
+            currentSalary={profile.current_salary}
+            onSave={refreshProfile}
+          />
+        </>
+      )}
     </>
   )
 }
