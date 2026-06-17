@@ -26,6 +26,7 @@ import { cilPlus, cilSearch, cilUser } from '@coreui/icons'
 import { usePermission } from '../../hooks/usePermission'
 import { MODULE } from '../../constants/modules'
 import api from '../../services/api'
+import { localEmployees } from '../../services/localEmployees'
 
 const STATUS_COLORS = {
   Active: 'success',
@@ -56,6 +57,7 @@ const EmployeeList = () => {
       setLoading(true)
       setError('')
       try {
+        // Try the real API first
         const params = new URLSearchParams({ page, page_size: PAGE_SIZE })
         if (search) params.set('search', search)
         if (filterStatus) params.set('status', filterStatus)
@@ -67,7 +69,18 @@ const EmployeeList = () => {
         setTotal(data.total)
         setTotalPages(data.total_pages)
       } catch {
-        setError('Failed to load employees')
+        // API not available — read from local store
+        const result = localEmployees.list({
+          search,
+          status: filterStatus,
+          department: filterDept,
+          category: filterCategory,
+          page,
+          pageSize: PAGE_SIZE,
+        })
+        setEmployees(result.items)
+        setTotal(result.total)
+        setTotalPages(result.total_pages)
       } finally {
         setLoading(false)
       }
@@ -166,7 +179,6 @@ const EmployeeList = () => {
                   <CTableHeaderCell>#</CTableHeaderCell>
                   <CTableHeaderCell>Employee ID</CTableHeaderCell>
                   <CTableHeaderCell>Employee Name</CTableHeaderCell>
-                  <CTableHeaderCell>State for PT</CTableHeaderCell>
                   <CTableHeaderCell>Designation</CTableHeaderCell>
                   <CTableHeaderCell>Department</CTableHeaderCell>
                   <CTableHeaderCell>Category</CTableHeaderCell>
@@ -178,35 +190,47 @@ const EmployeeList = () => {
               <CTableBody>
                 {employees.length === 0 ? (
                   <CTableRow>
-                    <CTableDataCell colSpan={10} className="text-center text-body-secondary py-4">
+                    <CTableDataCell colSpan={9} className="text-center text-body-secondary py-4">
                       No employees found
                     </CTableDataCell>
                   </CTableRow>
                 ) : (
-                  employees.map((emp, idx) => (
-                    <CTableRow
-                      key={emp.id}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/staff/${emp.id}`)}
-                    >
-                      <CTableDataCell>{(page - 1) * PAGE_SIZE + idx + 1}</CTableDataCell>
-                      <CTableDataCell className="fw-semibold">{emp.employee_id}</CTableDataCell>
-                      <CTableDataCell>{emp.full_name}</CTableDataCell>
-                      <CTableDataCell>{emp.state_for_pt}</CTableDataCell>
-                      <CTableDataCell>{emp.designation}</CTableDataCell>
-                      <CTableDataCell>{emp.department}</CTableDataCell>
-                      <CTableDataCell>{emp.employee_category}</CTableDataCell>
-                      <CTableDataCell>{emp.gender}</CTableDataCell>
-                      <CTableDataCell>
-                        ₹{Number(emp.current_salary).toLocaleString('en-IN')}
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        <CBadge color={STATUS_COLORS[emp.status] || 'secondary'}>
-                          {emp.status}
-                        </CBadge>
-                      </CTableDataCell>
-                    </CTableRow>
-                  ))
+                  employees.map((emp, idx) => {
+                    const name =
+                      emp.employee_name ||
+                      [emp.first_name, emp.middle_name, emp.last_name].filter(Boolean).join(' ') ||
+                      emp.full_name ||
+                      '—'
+                    const designation = emp.employment?.designation || emp.designation || '—'
+                    const department = emp.employment?.department || emp.department || '—'
+                    const salary = emp.current_salary || 0
+
+                    return (
+                      <CTableRow
+                        key={emp.id}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => navigate(`/staff/${emp.id}`)}
+                      >
+                        <CTableDataCell>{(page - 1) * PAGE_SIZE + idx + 1}</CTableDataCell>
+                        <CTableDataCell className="fw-semibold text-primary">
+                          {emp.employee_id}
+                        </CTableDataCell>
+                        <CTableDataCell>{name}</CTableDataCell>
+                        <CTableDataCell>{designation}</CTableDataCell>
+                        <CTableDataCell>{department}</CTableDataCell>
+                        <CTableDataCell>{emp.employee_category || '—'}</CTableDataCell>
+                        <CTableDataCell>{emp.gender || '—'}</CTableDataCell>
+                        <CTableDataCell>
+                          {salary > 0 ? `₹${Number(salary).toLocaleString('en-IN')}` : '—'}
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          <CBadge color={STATUS_COLORS[emp.status] || 'secondary'}>
+                            {emp.status}
+                          </CBadge>
+                        </CTableDataCell>
+                      </CTableRow>
+                    )
+                  })
                 )}
               </CTableBody>
             </CTable>

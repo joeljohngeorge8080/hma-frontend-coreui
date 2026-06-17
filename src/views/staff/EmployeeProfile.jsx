@@ -23,6 +23,7 @@ import { cilArrowLeft, cilFile, cilMoney, cilPencil, cilSwapHorizontal } from '@
 import { usePermission } from '../../hooks/usePermission'
 import { MODULE } from '../../constants/modules'
 import api from '../../services/api'
+import { localEmployees } from '../../services/localEmployees'
 
 import BasicInfoTab from './components/BasicInfoTab'
 import ContactTab from './components/ContactTab'
@@ -78,7 +79,13 @@ const EmployeeProfile = () => {
         const { data } = await api.get(`/employees/${id}`)
         setProfile(data)
       } catch {
-        setError('Failed to load employee profile')
+        // API not available — read from local store
+        const local = localEmployees.getById(id)
+        if (local) {
+          setProfile(local)
+        } else {
+          setError('Employee not found')
+        }
       } finally {
         setLoading(false)
       }
@@ -91,7 +98,8 @@ const EmployeeProfile = () => {
       const { data } = await api.get(`/employees/${id}`)
       setProfile(data)
     } catch {
-      // silent — stale profile is better than crashing
+      const local = localEmployees.getById(id)
+      if (local) setProfile(local)
     }
   }
 
@@ -107,9 +115,9 @@ const EmployeeProfile = () => {
     return <CAlert color="danger">{error || 'Employee not found'}</CAlert>
   }
 
-  const fullName = [profile.first_name, profile.middle_name, profile.last_name]
-    .filter(Boolean)
-    .join(' ')
+  const fullName =
+    profile.employee_name ||
+    [profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(' ')
 
   return (
     <>
@@ -138,7 +146,9 @@ const EmployeeProfile = () => {
                   {profile.status}
                 </CBadge>
                 <span className="text-body-secondary small">
-                  {profile.designation} &bull; {profile.department}
+                  {profile.employment?.designation || profile.designation || ''}{' '}
+                  {(profile.employment?.department || profile.department) &&
+                    `• ${profile.employment?.department || profile.department}`}
                 </span>
               </div>
             </CCol>
