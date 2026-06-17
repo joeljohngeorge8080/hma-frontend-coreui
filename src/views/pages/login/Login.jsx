@@ -123,23 +123,34 @@ const Login = () => {
                 {import.meta.env.DEV && (
                   <>
                     <hr />
-                    <CButton
-                      color="secondary"
-                      variant="outline"
-                      size="sm"
-                      className="w-100"
-                      type="button"
-                      onClick={() => {
-                        dispatch({
-                          type: 'set',
-                          user: { employee_id: 'DEV001', full_name: 'Dev User', role: 'CEO' },
-                          token: 'dev-token',
-                        })
-                        navigate('/dashboard')
-                      }}
-                    >
-                      Dev Login (CEO)
-                    </CButton>
+                    <p className="text-body-secondary small mb-2">Dev logins</p>
+                    <div className="d-grid gap-2">
+                      {[
+                        { role: 'CEO', id: 'DEV001', name: 'Dev CEO' },
+                        { role: 'Heads', id: 'DEV002', name: 'Dev Head' },
+                        { role: 'HR', id: 'DEV003', name: 'Dev HR' },
+                        { role: 'Finance', id: 'DEV004', name: 'Dev Finance' },
+                        { role: 'Project Officer', id: 'DEV005', name: 'Dev Project Officer' },
+                      ].map(({ role, id, name }) => (
+                        <CButton
+                          key={role}
+                          color="secondary"
+                          variant="outline"
+                          size="sm"
+                          type="button"
+                          onClick={() => {
+                            dispatch({
+                              type: 'set',
+                              user: { employee_id: id, full_name: name, role },
+                              token: `dev-token-${id}`,
+                            })
+                            navigate('/dashboard')
+                          }}
+                        >
+                          {role}
+                        </CButton>
+                      ))}
+                    </div>
                   </>
                 )}
               </CCardBody>
