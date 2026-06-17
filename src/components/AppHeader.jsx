@@ -1,15 +1,8 @@
 /**
  * AppHeader Component
  *
- * Main application header with navigation, theme switcher, and user menu.
- * Features include:
- * - Sidebar toggle button
- * - Primary navigation links
- * - Notification and action icons
- * - Theme switcher (light/dark/auto)
- * - User dropdown menu
- * - Breadcrumb navigation
- * - Sticky positioning with scroll shadow effect
+ * Application header with sidebar toggle, theme switcher (light/dark/auto),
+ * user dropdown, and breadcrumb row. Sticky with a scroll-shadow effect.
  *
  * @component
  * @example
@@ -19,7 +12,6 @@
  */
 
 import React, { useEffect, useRef } from 'react'
-import { NavLink } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   CContainer,
@@ -30,20 +22,10 @@ import {
   CHeader,
   CHeaderNav,
   CHeaderToggler,
-  CNavLink,
-  CNavItem,
   useColorModes,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import {
-  cilBell,
-  cilContrast,
-  cilEnvelopeOpen,
-  cilList,
-  cilMenu,
-  cilMoon,
-  cilSun,
-} from '@coreui/icons'
+import { cilContrast, cilMenu, cilMoon, cilSun } from '@coreui/icons'
 
 import { AppBreadcrumb } from './index'
 import { AppHeaderDropdown } from './header/index'
@@ -51,13 +33,8 @@ import { AppHeaderDropdown } from './header/index'
 /**
  * AppHeader functional component
  *
- * Manages header UI including:
- * - Redux integration for sidebar state
- * - Theme management with CoreUI useColorModes hook
- * - Scroll-based shadow effect
- * - Responsive navigation
- *
- * @returns {React.ReactElement} Header component with navigation and controls
+ * @returns {React.ReactElement} Header with sidebar toggle, theme switcher,
+ * user menu, and breadcrumb.
  */
 const AppHeader = () => {
   const headerRef = useRef()
@@ -85,40 +62,7 @@ const AppHeader = () => {
         >
           <CIcon icon={cilMenu} size="lg" />
         </CHeaderToggler>
-        <CHeaderNav className="d-none d-md-flex">
-          <CNavItem>
-            <CNavLink to="/dashboard" as={NavLink}>
-              Dashboard
-            </CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">Users</CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">Settings</CNavLink>
-          </CNavItem>
-        </CHeaderNav>
         <CHeaderNav className="ms-auto">
-          <CNavItem>
-            <CNavLink href="#">
-              <CIcon icon={cilBell} size="lg" />
-            </CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">
-              <CIcon icon={cilList} size="lg" />
-            </CNavLink>
-          </CNavItem>
-          <CNavItem>
-            <CNavLink href="#">
-              <CIcon icon={cilEnvelopeOpen} size="lg" />
-            </CNavLink>
-          </CNavItem>
-        </CHeaderNav>
-        <CHeaderNav>
-          <li className="nav-item py-1">
-            <div className="vr h-100 mx-2 text-body text-opacity-75"></div>
-          </li>
           <CDropdown variant="nav-item" placement="bottom-end">
             <CDropdownToggle caret={false}>
               {colorMode === 'dark' ? (

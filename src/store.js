@@ -13,11 +13,19 @@ import { legacy_createStore as createStore } from 'redux'
  * Initial state for the Redux store
  * @type {Object}
  * @property {boolean} sidebarShow - Controls sidebar visibility (true = visible, false = hidden)
+ * @property {boolean} sidebarUnfoldable - Controls sidebar narrow/wide mode
  * @property {string} theme - Current theme mode ('light', 'dark', or 'auto')
+ * @property {Object|null} user - Authenticated user ({ employee_id, full_name, role })
+ * @property {string|null} token - JWT access token
  */
 const initialState = {
   sidebarShow: true,
+  sidebarUnfoldable: false,
   theme: 'light',
+  // TEMP Phase-0 mock so the shell renders before login exists.
+  // Replaced with `user: null` + real JWT login in Phase 1.
+  user: { employee_id: 'THLL0001', full_name: 'Dev User', role: 'CEO' },
+  token: null,
 }
 
 /**
