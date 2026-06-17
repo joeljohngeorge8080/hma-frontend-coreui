@@ -29,4 +29,5 @@ const usePermission = (moduleKey, action = 'view') => {
   return access === ACCESS.VIEW || access === ACCESS.EDIT
 }
 
+export { usePermission }
 export default usePermission

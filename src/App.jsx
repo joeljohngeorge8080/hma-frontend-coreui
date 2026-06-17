@@ -51,7 +51,8 @@ const App = () => {
   const storedTheme = useSelector((state) => state.theme)
   const token = useSelector((state) => state.token)
   const dispatch = useDispatch()
-  const [isInitializing, setIsInitializing] = useState(true)
+  // True only when a stored token needs to be validated via /auth/me
+  const [isInitializing, setIsInitializing] = useState(() => Boolean(token))
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.href.split('?')[1])
@@ -67,10 +68,7 @@ const App = () => {
 
   // Rehydrate user from stored token on app startup
   useEffect(() => {
-    if (!token) {
-      setIsInitializing(false)
-      return
-    }
+    if (!token) return
     getMeApi()
       .then(({ data }) => dispatch({ type: 'set', user: data }))
       .catch(() => {

@@ -15,13 +15,16 @@ import CIcon from '@coreui/icons-react'
 
 import avatar8 from './../../assets/images/avatars/8.jpg'
 import useAuth from '../../hooks/useAuth'
+import { logoutApi } from '../../services/auth'
 
 const AppHeaderDropdown = () => {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logoutApi()
+    localStorage.removeItem('hma_token')
     dispatch({ type: 'set', user: null, token: null })
     navigate('/login')
   }

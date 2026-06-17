@@ -21,6 +21,8 @@ import Placeholder from './views/Placeholder'
 
 // Built views
 const Dashboard = React.lazy(() => import('./views/dashboard/Dashboard'))
+const EmployeeList = React.lazy(() => import('./views/staff/EmployeeList'))
+const EmployeeProfile = React.lazy(() => import('./views/staff/EmployeeProfile'))
 
 /**
  * Build a placeholder page component bound to a fixed title/message.
@@ -67,16 +69,11 @@ export const routes = [
   },
 
   // Staff & Payroll
-  {
-    path: '/staff',
-    name: 'Staff & Payroll',
-    element: placeholder('Staff & Payroll'),
-    module: MODULE.STAFF_PAYROLL,
-  },
+  { path: '/staff', name: 'Staff & Payroll', element: EmployeeList, module: MODULE.STAFF_PAYROLL },
   {
     path: '/staff/:id',
     name: 'Employee Profile',
-    element: placeholder('Employee Profile'),
+    element: EmployeeProfile,
     module: MODULE.STAFF_PAYROLL,
   },
 
