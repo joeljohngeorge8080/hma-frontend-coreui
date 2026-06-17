@@ -101,6 +101,7 @@ const AttendanceImport = () => {
   const [parseErrors, setParseErrors] = useState([])
   const [parseWarnings, setParseWarnings] = useState([])
   const [parsedRows, setParsedRows] = useState([])
+  const [periodMismatch, setPeriodMismatch] = useState(null) // { detectedYear, detectedMonth }
 
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState(null)
@@ -133,12 +134,23 @@ const AttendanceImport = () => {
     setParsing(true)
     setParseErrors([])
     setParsedRows([])
+    setPeriodMismatch(null)
     try {
-      const { rows, errors, warnings } = await parseAttendanceExcel(file)
+      const { rows, errors, warnings, detectedYear, detectedMonth } =
+        await parseAttendanceExcel(file)
       setParseErrors(errors)
       setParseWarnings(warnings)
       setParsedRows(rows)
+
       if (errors.length === 0 && rows.length > 0) {
+        // Auto-fill period from file; warn if it doesn't match user selection
+        if (detectedYear && detectedMonth) {
+          if (detectedYear !== year || detectedMonth !== month) {
+            setPeriodMismatch({ detectedYear, detectedMonth })
+          }
+          setYear(detectedYear)
+          setMonth(detectedMonth)
+        }
         setStep(2)
       }
     } catch (err) {
@@ -336,6 +348,29 @@ const AttendanceImport = () => {
             </strong>
           </CCardHeader>
           <CCardBody>
+            {/* Period auto-detected banner */}
+            {periodMismatch ? (
+              <CAlert color="warning" className="small mb-3 py-2">
+                <CIcon icon={cilWarning} className="me-1" />
+                Period mismatch: you selected{' '}
+                <strong>
+                  {MONTHS[month - 1]} {year}
+                </strong>{' '}
+                but the file contains data for{' '}
+                <strong>
+                  {MONTHS[periodMismatch.detectedMonth - 1]} {periodMismatch.detectedYear}
+                </strong>
+                . Period has been auto-corrected to match the file.
+              </CAlert>
+            ) : (
+              <CAlert color="success" className="small mb-3 py-2">
+                Period auto-detected from file:{' '}
+                <strong>
+                  {MONTHS[month - 1]} {year}
+                </strong>
+              </CAlert>
+            )}
+
             {/* Quick summary */}
             <div className="d-flex flex-wrap gap-2 mb-3">
               {Object.entries(statusCounts).map(([status, count]) => (
